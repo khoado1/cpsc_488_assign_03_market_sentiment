@@ -1,0 +1,11 @@
+numpy
+pandas
+pandera
+scipy
+scikit-learn
+torch
+yfinance
+requests
+beautifulsoup4
+lxml
+playwright
