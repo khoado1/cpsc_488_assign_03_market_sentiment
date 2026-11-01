@@ -16,6 +16,8 @@ from pathlib import Path
 import argparse
 import sys
 import pandas as pd
+from bs4 import BeautifulSoup
+import re
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / 'datasets'
@@ -66,6 +68,60 @@ def read_checked(path: Path, name: str, *, test: bool = False) -> pd.DataFrame:
     print(f'[OK] {name}: {len(df):,} records, {len(df.columns)} columns, dates parsed')
     return df
 
+def preprocess_news(df: pd.DataFrame) -> pd.DataFrame:
+    """Preprocess the news DataFrame for vectorization.
+
+    This function is a placeholder for future preprocessing steps, such as:
+    - Lowercasing text
+    - Removing punctuation
+    - Tokenization
+    - Stopword removal
+    - Lemmatization or stemming
+
+    Currently, it returns the DataFrame unchanged.
+    """
+    # Placeholder for actual preprocessing logic
+    df = df.copy()
+
+    # Preprocessing steps would go here
+    df['headline'] = df['headline'].astype(str).str.lower().str.strip()
+    #df['headline'] = df['headline'].str.replace(r'[^\w\s]', '', regex=True)
+
+
+    return df
+
+def clean_html_text(raw_text: str) -> str:
+    """Remove HTML tags and unescape HTML entities from a string."""
+    soup = BeautifulSoup(raw_text or '', 'html.parser')
+
+    # Prefer the article/main content when the input is a full HTML document
+    main_content = soup.find(['article', 'main'])
+    if main_content:
+        text = main_content.get_text(separator=' ', strip=True)
+    else:
+        text = soup.get_text(separator=' ', strip=True)
+    return text
+
+    main_content = soup.find(['article', 'main' ])
+    if main_content:
+        text = main_content.get_text(seprator= ' ', strip=True)
+    else:
+        text = soup.get_text(separator=' ', strip=True)
+
+    for ele in content.find_all(['script', 'style', 'noscript', 'nav', 'footer', 'header', 'aside', 'iframe', 'form']):
+        ele.decompose()
+
+    ad_marker = re.compile(
+        r"\b(?:ad|ads|advert|advertisement|sponsored|promo)\b",
+        re.IGNORECASE
+    )
+
+    for ele in list(content.find_all(True)):
+        labels = [element.get('id', ''), *element.get('class', [])]
+        if any(ad_marker.sear):
+    
+    return text
+    
 
 def main() -> int:
     parser = argparse.ArgumentParser(description='Validate Assignment 3 CSV inputs')
@@ -76,8 +132,9 @@ def main() -> int:
     impacts_path = (DATA / 'sample_historical_impacts_values.csv' if args.test else IMPACTS)
     print(f"[MODE] {'SAMPLE TEST' if args.test else 'PRODUCTION'}")
     try:
-        read_checked(news_path, 'news', test=args.test)
-        read_checked(impacts_path, 'impacts', test=args.test)
+        news_df = read_checked(news_path, 'news', test=args.test)
+        preprocessed_news_df = preprocess_news(news_df)
+        impacts_df = read_checked(impacts_path, 'impacts', test=args.test)
     except ValueError as exc:
         print(f'[ACTION NEEDED] {exc}', file=sys.stderr)
         return 1
