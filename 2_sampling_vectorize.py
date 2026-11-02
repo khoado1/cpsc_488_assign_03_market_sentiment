@@ -183,35 +183,15 @@ def main() -> int:
         window_size = 3
 
         event_dates = matched_df['date'].drop_duplicates().sort_values().reset_index(drop=True)
-        split_date = event_dates.iloc[int(train_share * len(event_dates))]
+        split_index = int(train_share * len(event_dates))
 
-        date_positions = pd.Series(
-            range(len(event_dates)),
-            index=event_dates,
-        )
-        event_positions = matched_df['date'].map(date_positions)
-        has_full_window = (
-            event_positions.notna()
-            & (event_positions + window_size - 1 < len(event_dates))
-        )
+        # Keep only start dates whose full three-date window stays in its partition.
+        train_dates = event_dates.iloc[:max(0, split_index - window_size + 1)]
+        test_date_stop = max(0, len(event_dates) - window_size + 1)
+        test_dates = event_dates.iloc[split_index:test_date_stop]
 
-        window_end = pd.Series(pd.NaT, index=matched_df.index, dtype='datetime64[ns, UTC]')
-        end_positions = (event_positions.loc[has_full_window] + window_size - 1).astype(int)
-        window_end.loc[has_full_window] = event_dates.take(end_positions.to_numpy())
-
-        train_mask = (
-            (matched_df['date'] < split_date)
-            & window_end.notna()
-            & (window_end < split_date)
-        )
-        test_mask = (
-            (matched_df['date'] >= split_date)
-            & window_end.notna()
-            & (window_end < period_end)
-        )
-
-        train_df = matched_df.loc[train_mask].copy()
-        test_df = matched_df.loc[test_mask].copy()
+        train_df = matched_df.loc[matched_df['date'].isin(train_dates)].copy()
+        test_df = matched_df.loc[matched_df['date'].isin(test_dates)].copy()
 
 
     except ValueError as exc:
