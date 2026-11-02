@@ -10,6 +10,12 @@ python -m pip install -r requirements.txt
 
 #To run scripts
 
+# Calculate market-reaction targets from historical_prices.csv
+python 1_calculate_impacts_values.py
+
+# The script reads datasets/historical_prices.csv and writes
+# datasets/historical_impacts_values.csv. Include the S&P 500 index as ^sp500.
+
 # To run against the sample CSVs
 python 2_sampling_vectorize.py --test
 
