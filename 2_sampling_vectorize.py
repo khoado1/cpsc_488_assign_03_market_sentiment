@@ -1,4 +1,4 @@
-"""CPSC 488 Assignment 3 — Increment 1: inspect and validate inputs.
+"""CPSC 488 Assignment 3 — sample, match, and vectorize news events.
 
 Run from the Assignment_3 project directory:
     python 2_sampling_vectorize.py
@@ -10,16 +10,19 @@ Expected real inputs (place in datasets/):
 
 Test mode uses the professor's sample files, skipping rows with missing
 ticker symbols with an explicit warning. Production mode stays strict.
-This increment deliberately does not produce training data yet.
+The four vectorized train/test datasets are written to datasets/.
 """
 from pathlib import Path
 import argparse
+import json
 import sys
+
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
 import contractions
 import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / 'datasets'
@@ -33,6 +36,9 @@ REQUIRED = {
 
 news_start_years = [2009, 2010, 2011, 2012, 2013, 2014]
 news_period = 7
+train_share = 0.8
+event_window_size = 3
+OUTPUT_COLUMNS = ['date', 'symbol', 'news_vector', 'IIS', 'MIV']
 
 def read_checked(path: Path, name: str, *, test: bool = False) -> pd.DataFrame:
     if not path.is_file():
@@ -54,6 +60,7 @@ def read_checked(path: Path, name: str, *, test: bool = False) -> pd.DataFrame:
             df = df.loc[~bad_symbol].copy()
             if df.empty:
                 raise ValueError('news: no valid sample rows remain')
+    df = df.copy()
     for col in ('date', 'symbol'):
         if df[col].isna().any() or df[col].astype(str).str.strip().eq('').any():
             count = int((df[col].isna() | df[col].astype(str).str.strip().eq('')).sum())
@@ -61,6 +68,8 @@ def read_checked(path: Path, name: str, *, test: bool = False) -> pd.DataFrame:
     dates = pd.to_datetime(df['date'], errors='coerce', utc=True)
     if dates.isna().any():
         raise ValueError(f'{name}: {int(dates.isna().sum())} rows have unparseable dates')
+    df['date'] = dates.dt.normalize()
+    df['symbol'] = df['symbol'].astype(str).str.strip().str.upper()
     if name == 'news':
         if df['headline'].isna().any() or df['headline'].astype(str).str.strip().eq('').any():
             raise ValueError('news: one or more rows have blank headlines')
@@ -69,32 +78,27 @@ def read_checked(path: Path, name: str, *, test: bool = False) -> pd.DataFrame:
             values = pd.to_numeric(df[col], errors='coerce')
             if values.isna().any():
                 raise ValueError(f'impacts: {int(values.isna().sum())} invalid or missing {col} values')
+            df[col] = values
     print(f'[OK] {name}: {len(df):,} records, {len(df.columns)} columns, dates parsed')
     return df
 
 def preprocess_news(df: pd.DataFrame) -> pd.DataFrame:
-    """Preprocess the news DataFrame for vectorization.
+    """Clean article/headline text and produce one document per company-day."""
+    df = df.copy()
+    if 'article' not in df.columns:
+        df['article'] = ''
 
-    This function is a placeholder for future preprocessing steps
-
-    """
-
-    # Preprocessing steps would go here
-
-    for col in ['headline', 'article']:
-        if col == 'article':
-            df[col] = df[col].apply(clean_html_text)
-
-        df[col] = (
-            df[col]
-            .str.lower()
-            .str.replace(r'\s+', ' ', regex=True)
-            .str.strip()
-        )
-
+    for col in ('headline', 'article'):
+        df[col] = df[col].fillna('').astype(str).apply(clean_html_text)
+        df[col] = df[col].str.lower().str.replace(r'\s+', ' ', regex=True).str.strip()
         df[col] = df[col].apply(contractions.fix)
 
-    df['text'] = df['headline'] + ' ' + df['article']
+    df['text'] = (df['headline'] + ' ' + df['article']).str.strip()
+    df = df.groupby(['date', 'symbol'], as_index=False, sort=False).agg(
+        text=('text', lambda documents: ' '.join(text for text in documents if text))
+    )
+    if df.empty or df['text'].str.strip().eq('').all():
+        raise ValueError('news: no non-empty company-day text remains after preprocessing')
 
     return df
 
@@ -108,7 +112,6 @@ def clean_html_text(raw_text: str | None) -> str:
 
     # Prefer the article/main content when the input is a full HTML document
     content = soup.find(['article', 'main' ]) or soup
-    text = content.get_text(separator=' ', strip=True)
 
     # Remove non-content elements that are likely to be ads or navigation
     for ele in content.find_all(['script', 'style', 'noscript', 'nav', 'footer', 'header', 'aside', 'iframe', 'form']):
@@ -134,8 +137,7 @@ def clean_html_text(raw_text: str | None) -> str:
 
     return content.get_text(separator=' ', strip=True)
 
-def filter_on_range(news_df: pd.DataFrame, impacts_df: pd.DataFrame, start_years: list, period: int) -> tuple[pd.DataFrame, pd.DataFrame, Timestamp]:
-    # Placeholder for range-based preprocessing logic
+def filter_on_range(news_df: pd.DataFrame, impacts_df: pd.DataFrame, start_years: list, period: int) -> tuple[pd.DataFrame, pd.DataFrame, pd.Timestamp]:
     np.random.seed(42)  # For reproducibility
 
     start_year = np.random.choice(start_years)
@@ -143,8 +145,10 @@ def filter_on_range(news_df: pd.DataFrame, impacts_df: pd.DataFrame, start_years
     start = pd.Timestamp(year=start_year, month=1, day=1, tz='UTC')
     period_end = pd.Timestamp(year=end_year, month=1, day=1, tz='UTC')
 
+    news_df = news_df.copy()
+    impacts_df = impacts_df.copy()
     for df in (news_df, impacts_df):
-        df['date'] = pd.to_datetime(df['date'], utc=True)
+        df['date'] = pd.to_datetime(df['date'], utc=True).dt.normalize()
 
     news_df = news_df[(news_df['date'] >= start) & (news_df['date'] < period_end)]
     impacts_df = impacts_df[(impacts_df['date'] >= start) & (impacts_df['date'] < period_end)]
@@ -152,17 +156,110 @@ def filter_on_range(news_df: pd.DataFrame, impacts_df: pd.DataFrame, start_years
     return news_df, impacts_df, period_end
 
 def match_news_to_impacts(news_df: pd.DataFrame, impacts_df: pd.DataFrame) -> pd.DataFrame:
-    labels = impacts_df[['date', 'symbol', 'IIS', 'MIV']]
+    labels = impacts_df[['date', 'symbol', 'IIS', 'MIV']].copy()
+    labels['date'] = pd.to_datetime(labels['date'], utc=True).dt.normalize()
+    labels['symbol'] = labels['symbol'].astype(str).str.strip().str.upper()
 
-    return news_df.merge(
-        labels,
-        on=['date', 'symbol'],
-        how='inner',
-        validate='many_to_one'
+    try:
+        matched = news_df.merge(
+            labels,
+            on=['date', 'symbol'],
+            how='inner',
+            validate='many_to_one'
+        )
+    except pd.errors.MergeError as exc:
+        raise ValueError(
+            'impacts: expected at most one target row per date and symbol'
+        ) from exc
+    if matched.empty:
+        raise ValueError('No news events matched historical impacts in the selected period')
+    return matched.sort_values(['date', 'symbol']).reset_index(drop=True)
+
+def split_on_event_window(
+    matched_df: pd.DataFrame,
+    impacts_df: pd.DataFrame,
+    share: float = train_share,
+    window_size: int = event_window_size,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Timestamp]:
+    """Split chronologically and keep event windows entirely within each split."""
+    trading_dates = pd.Index(
+        pd.to_datetime(impacts_df['date'], utc=True).dt.normalize().drop_duplicates().sort_values()
     )
+    if len(trading_dates) < window_size:
+        raise ValueError(
+            f'Need at least {window_size} trading dates for the event window; '
+            f'found {len(trading_dates)}'
+        )
+
+    split_index = int(share * len(trading_dates))
+    if split_index < window_size or len(trading_dates) - split_index < window_size:
+        raise ValueError(
+            f'Not enough trading dates to keep {window_size}-day event windows '
+            f'in both partitions ({split_index} training, '
+            f'{len(trading_dates) - split_index} testing dates)'
+        )
+
+    date_positions = pd.Series(np.arange(len(trading_dates)), index=trading_dates)
+    positions = pd.to_datetime(matched_df['date'], utc=True).dt.normalize().map(date_positions)
+    if positions.isna().any():
+        raise ValueError('Matched news contains dates absent from the trading calendar')
+
+    train_mask = positions + window_size <= split_index
+    test_mask = (
+        (positions >= split_index)
+        & (positions + window_size <= len(trading_dates))
+    )
+    train_df = matched_df.loc[train_mask].copy()
+    test_df = matched_df.loc[test_mask].copy()
+    if train_df.empty or test_df.empty:
+        raise ValueError(
+            'No observations remain in one or both partitions after excluding '
+            f'{window_size}-trading-day event windows that cross a boundary'
+        )
+
+    return train_df, test_df, trading_dates[split_index]
+
+def vectorize_splits(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+) -> dict[str, pd.DataFrame]:
+    """Fit DTM and TF-IDF on training text only, then transform both splits."""
+    outputs: dict[str, pd.DataFrame] = {}
+    train_documents = train_df['text'].fillna('').astype(str).tolist()
+    test_documents = test_df['text'].fillna('').astype(str).tolist()
+    metadata_columns = ['date', 'symbol', 'IIS', 'MIV']
+
+    vectorizers = {
+        'dtm': CountVectorizer(),
+        'tfidf': TfidfVectorizer(),
+    }
+    for name, vectorizer in vectorizers.items():
+        try:
+            train_matrix = vectorizer.fit_transform(train_documents)
+            test_matrix = vectorizer.transform(test_documents)
+        except ValueError as exc:
+            raise ValueError(f'{name.upper()} vectorization failed: {exc}') from exc
+
+        for split_name, source, matrix in (
+            ('train', train_df, train_matrix),
+            ('test', test_df, test_matrix),
+        ):
+            result = source[metadata_columns].copy()
+            result['date'] = pd.to_datetime(result['date'], utc=True).dt.strftime('%Y-%m-%d')
+            result['news_vector'] = [
+                json.dumps(matrix.getrow(index).toarray().ravel().tolist(), separators=(',', ':'))
+                for index in range(matrix.shape[0])
+            ]
+            outputs[f'{name}_{split_name}'] = result[OUTPUT_COLUMNS]
+
+        print(
+            f'[OK] {name.upper()}: {train_matrix.shape[1]:,} training vocabulary terms; '
+            f'{train_matrix.shape[0]:,} training and {test_matrix.shape[0]:,} test documents'
+        )
+    return outputs
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='Validate Assignment 3 CSV inputs')
+    parser = argparse.ArgumentParser(description='Sample and vectorize Assignment 3 news data')
     parser.add_argument('--test', action='store_true',
                         help='read the professor sample CSVs (not production data)')
     args = parser.parse_args()
@@ -174,30 +271,34 @@ def main() -> int:
         news_df = preprocess_news(news_df)
         impacts_df = read_checked(impacts_path, 'impacts', test=args.test)
         news_df, impacts_df, period_end = filter_on_range(news_df, impacts_df, news_start_years, news_period)
-
+        period_start = period_end - pd.DateOffset(years=news_period)
+        print(
+            f'[OK] Selected period: {period_start.date()} through '
+            f'{(period_end - pd.Timedelta(days=1)).date()} '
+            f'({news_period} years; np.random.seed(42), chronological dates)'
+        )
+        if news_df.empty or impacts_df.empty:
+            raise ValueError(
+                'No input records fall within the selected 7-year period '
+                f'{period_start.date()} to {period_end.date()}'
+            )
         matched_df = match_news_to_impacts(news_df, impacts_df)
-
-        matched_df = matched_df.sort_values(['date', 'symbol']).reset_index(drop=True)
-
-        train_share = 0.8
-        window_size = 3
-
-        event_dates = matched_df['date'].drop_duplicates().sort_values().reset_index(drop=True)
-        split_index = int(train_share * len(event_dates))
-
-        # Keep only start dates whose full three-date window stays in its partition.
-        train_dates = event_dates.iloc[:max(0, split_index - window_size + 1)]
-        test_date_stop = max(0, len(event_dates) - window_size + 1)
-        test_dates = event_dates.iloc[split_index:test_date_stop]
-
-        train_df = matched_df.loc[matched_df['date'].isin(train_dates)].copy()
-        test_df = matched_df.loc[matched_df['date'].isin(test_dates)].copy()
-
+        train_df, test_df, test_start = split_on_event_window(matched_df, impacts_df)
+        print(
+            f'[OK] Chronological split: {len(train_df):,} train and {len(test_df):,} test '
+            f'observations; test period starts {test_start.date()}. '
+            f'Excluded event windows crossing the split.'
+        )
+        vectorized = vectorize_splits(train_df, test_df)
+        for dataset_name, output_df in vectorized.items():
+            output_path = DATA / f'news_{dataset_name}.csv'
+            output_df.to_csv(output_path, index=False)
+            print(f'[OK] Wrote {output_path}')
 
     except ValueError as exc:
         print(f'[ACTION NEEDED] {exc}', file=sys.stderr)
         return 1
-    print('[OK] Input validation complete; sampling/vectorization not implemented yet.')
+    print('[OK] Sampling, matching, and vectorization complete.')
     return 0
 
 

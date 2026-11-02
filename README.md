@@ -10,8 +10,16 @@ python -m pip install -r requirements.txt
 
 #To run scripts
 
-#To run the script against the sample_news.csv and sample_historical_impact_values.csv
+# To run against the sample CSVs
 python 2_sampling_vectorize.py --test
 
-#To run the script against the actual data: news.csv and historical_impact_values.csv
-python 2_sampling_vectorize.py 
+# The sample fixtures are format examples only: their 2023 dates are outside the
+# required 2009-2020 study period, and they do not contain enough trading days
+# for the three-day event window. Sample mode therefore reports why it cannot
+# produce training/test files.
+
+# To run against actual data: news.csv and historical_impacts_values.csv
+python 2_sampling_vectorize.py
+
+# Successful runs write news_dtm_train.csv, news_dtm_test.csv,
+# news_tfidf_train.csv, and news_tfidf_test.csv to datasets/.
