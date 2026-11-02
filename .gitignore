@@ -5,3 +5,5 @@ __pycache__/
 
 /datasets/news_datasets.zip
 /datasets/news_datasets/*
+news_datasets.zip
+/news_datasets/*

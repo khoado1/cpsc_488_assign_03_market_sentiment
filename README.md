@@ -10,6 +10,14 @@ python -m pip install -r requirements.txt
 
 #To run scripts
 
+# Prepare datasets/news.csv and datasets/historical_prices.csv from the files
+# in news_datasets/. This command downloads current S&P 500 constituents and
+# historical prices, so it requires an internet connection.
+python 0_Data_Prep.py
+
+# For a quick end-to-end smoke test, limit preparation to three companies.
+python 0_Data_Prep.py --ticker-limit 3
+
 # Calculate market-reaction targets from historical_prices.csv
 python 1_calculate_impacts_values.py
 

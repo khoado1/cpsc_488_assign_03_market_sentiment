@@ -1,3 +1,4 @@
-symbol,company_name,,,,
-AAPL,Apple Inc.,,,,
-,,,,,
+ticker,company_name
+A,Agilent Technologies
+AAPL,Apple Inc.
+ABBV,AbbVie
