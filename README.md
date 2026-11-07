@@ -7,6 +7,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 python -m pip install -r requirements.txt
+pip install --upgrade pip
 
 #To run scripts
 
@@ -37,3 +38,9 @@ python 2_sampling_vectorize.py
 
 # Successful runs write news_dtm_train.csv, news_dtm_test.csv,
 # news_tfidf_train.csv, and news_tfidf_test.csv to datasets/.
+
+# To classify:
+python 3_classify.py --vectorizer both
+
+# To run regression
+python 4_regression.py
