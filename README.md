@@ -43,4 +43,22 @@ python 2_sampling_vectorize.py
 python 3_classify.py --vectorizer both
 
 # To run regression
-python 4_regression.py
+python 4_regression.py --vectorizer both
+
+# Test run, ensure that you have news_datasets.zip in your folder and unzipped, only run if you want the full path
+
+python 0_Data_Prep.py
+python 1_calculate_impacts_values.py
+python 2_sampling_vectorize.py
+python 3_classify.py --vectorizer both
+python 4_regression.py --vectorizer both
+
+# Complete run, ensure that you have news_datasets.zip in your folder and unzipped, only run if you want the full path
+
+python 0_Data_Prep.py --ticker-limit 3
+python 1_calculate_impacts_values.py
+python 2_sampling_vectorize.py
+python 3_classify.py --vectorizer both
+python 4_regression.py --vectorizer both
+
+
