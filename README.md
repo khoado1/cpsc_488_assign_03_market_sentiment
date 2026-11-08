@@ -40,25 +40,25 @@ python 2_sampling_vectorize.py
 # news_tfidf_train.csv, and news_tfidf_test.csv to datasets/.
 
 # To classify:
-python 3_classify.py --vectorizer both
+python 3_classify.py
 
 # To run regression
-python 4_regression.py --vectorizer both
+python 4_regression.py
 
-# Test run, ensure that you have news_datasets.zip in your folder and unzipped, only run if you want the full path
-
-python 0_Data_Prep.py
-python 1_calculate_impacts_values.py
-python 2_sampling_vectorize.py
-python 3_classify.py --vectorizer both
-python 4_regression.py --vectorizer both
-
-# Complete run, ensure that you have news_datasets.zip in your folder and unzipped, only run if you want the full path
+# Test run, ensure that you have news_datasets.zip in your folder and unzipped
 
 python 0_Data_Prep.py --ticker-limit 3
 python 1_calculate_impacts_values.py
 python 2_sampling_vectorize.py
-python 3_classify.py --vectorizer both
-python 4_regression.py --vectorizer both
+python 3_classify.py
+python 4_regression.py
+
+# Complete run, ensure that you have news_datasets.zip in your folder and unzipped, only run if you want the full set
+
+python 0_Data_Prep.py
+python 1_calculate_impacts_values.py
+python 2_sampling_vectorize.py
+python 3_classify.py
+python 4_regression.py
 
 
