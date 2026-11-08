@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .DS_Store
+~$*.docx
 
 /datasets/news_datasets.zip
 /datasets/news_datasets/*
